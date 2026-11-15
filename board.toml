@@ -15,10 +15,11 @@ description = "Xiaomi 13"
 kit = "fuxi"
 
 [components]
-# Task 4: QcomGeniSpi (upstream SPI engine the FTM5 hangs off) + FuxiFtsTouch
-# (vendored ST FTM5 protocol in drivers/FuxiFtsTouch, built by
-# scripts/build-fuxi-touch.py; the HID digitizer by build-fuxi-hid-input.py).
-include = ["ArmDTPlatform", "ArmCpu", "SoftwareAES", "XnuPrelink", "DarwinBoot", "QcomGeniSpi", "FuxiFtsTouch"]
+# Task 4: QcomGeniSpi (upstream SPI engine the FTM5 hangs off). The FTM5 protocol
+# itself (drivers/FuxiFtsTouch) is NOT an upstream catalog component — it is built
+# by scripts/build-fuxi-touch.py straight from the vendored sources; the HID
+# digitizer by build-fuxi-hid-input.py.
+include = ["ArmDTPlatform", "ArmCpu", "SoftwareAES", "XnuPrelink", "DarwinBoot", "QcomGeniSpi"]
 
 [kernel]
 defconfig = "fuxi_defconfig"
