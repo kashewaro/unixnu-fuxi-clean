@@ -66,7 +66,7 @@ print(f'assembled {bindings.relative_to(ROOT)}')
 
 stub_obj = OUT / 'FuxiUfsPolicyStub.o'
 run([xcrun, 'clang++', '-target', 'arm64-apple-ios17.0', '-isysroot', sdk,
-     '-O2', '-Werror', '-Wall', '-Wextra', '-mgeneral-regs-only',
+     '-std=gnu++17', '-O2', '-Werror', '-Wall', '-Wextra', '-mgeneral-regs-only',
      '-I', ROOT / 'kits/VerifiedRoot/include', '-I', ROOT / 'drivers/VirtioMmioBlock',
      '-c', stub, '-o', stub_obj])
 print(f'compiled {stub.relative_to(ROOT)}')
