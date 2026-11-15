@@ -16,7 +16,7 @@ kit = "fuxi"
 
 [components]
 # Task 4: QcomGeniSpi (upstream SPI engine the FTM5 hangs off). The FTM5 protocol
-# itself (drivers/FuxiFtsTouch) is NOT an upstream catalog component — it is built
+# itself (package/FuxiFtsTouch) is NOT an upstream catalog component — it is built
 # by scripts/build-fuxi-touch.py straight from the vendored sources; the HID
 # digitizer by build-fuxi-hid-input.py.
 include = ["ArmDTPlatform", "ArmCpu", "SoftwareAES", "XnuPrelink", "DarwinBoot", "QcomGeniSpi"]

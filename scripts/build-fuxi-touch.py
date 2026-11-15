@@ -55,17 +55,17 @@ def main():
     cxx = record(OBJ / 'iokit/DEVELOPMENT/IOPlatformExpert.cpo.json')
     c = record(OBJ / 'osfmk/DEVELOPMENT/startup.o.json')
     osfmk = ['-I', ROOT / '.cache/xnu-work/osfmk']
-    includes = ['-I', KIT, '-I', ROOT / 'drivers/FuxiFtsTouch', '-I', ROOT / 'drivers/QcomGeniSpi']
+    includes = ['-I', KIT, '-I', KIT / 'FuxiFtsTouch', '-I', ROOT / 'drivers/QcomGeniSpi']
     jobs = [(cxx, KIT / 'FuxiTouchProbe.cpp', CXX_FLAGS + osfmk + includes),
             (cxx, KIT / 'FuxiHidProbe.cpp', CXX_FLAGS + osfmk + includes),
             (cxx, KIT / 'FuxiSysProbe.cpp', CXX_FLAGS + osfmk + includes)]
-    for source in (ROOT / 'drivers/FuxiFtsTouch/FtsProtocol.c', ROOT / 'drivers/FuxiFtsTouch/FtsTouchCore.c',
+    for source in (KIT / 'FuxiFtsTouch/FtsProtocol.c', KIT / 'FuxiFtsTouch/FtsTouchCore.c',
                    ROOT / 'drivers/QcomGeniSpi/GeniSpi.c', KIT / 'QcomRpmh.c'):
         jobs.append((c, source, C_FLAGS + osfmk))
     objects = []
     for rec, source, flags in jobs:
         if not source.is_file():
-            sys.exit(f'{source} missing: select FuxiFtsTouch and QcomGeniSpi in board.toml [components]')
+            sys.exit(f'{source} missing: QcomGeniSpi must be selected in board.toml [components], FTM5 sources vendored in package/FuxiFtsTouch')
         obj = OUT / (source.stem + '.o')
         subprocess.run(command(rec, source, obj, flags), cwd=rec['directory'], check=True, timeout=180)
         objects.append(obj)

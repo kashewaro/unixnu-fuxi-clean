@@ -47,7 +47,7 @@ jobs:
       - name: FuxiFtsTouch protocol tests
         run: |
           flags="-std=c11 -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Werror -g -fsanitize=address,undefined"
-          cd drivers/FuxiFtsTouch
+          cd package/FuxiFtsTouch
           for t in fts-protocol touch-core; do
             for cc in gcc clang; do
               $cc $flags -I. Test/$t.c FtsProtocol.c FtsTouchCore.c -o /tmp/$t-$cc
@@ -56,8 +56,8 @@ jobs:
           done
       - name: Board constants test
         run: |
-          gcc -std=c11 -Wall -Wextra -Werror -Ipackage -Idrivers/FuxiFtsTouch tests/board_test.c \
-            drivers/FuxiFtsTouch/FtsTouchCore.c -o /tmp/board_test
+          gcc -std=c11 -Wall -Wextra -Werror -Ipackage -Ipackage/FuxiFtsTouch tests/board_test.c \
+            package/FuxiFtsTouch/FtsTouchCore.c -o /tmp/board_test
           /tmp/board_test
       - name: Scripts syntax
         run: |
@@ -83,7 +83,7 @@ jobs:
       - name: Compile the touch C sources for arm64 iOS kernel code
         run: |
           sdk=$(xcrun --sdk iphoneos --show-sdk-path)
-          for f in drivers/FuxiFtsTouch/FtsProtocol.c drivers/FuxiFtsTouch/FtsTouchCore.c package/QcomRpmh.c; do
+          for f in package/FuxiFtsTouch/FtsProtocol.c package/FuxiFtsTouch/FtsTouchCore.c package/QcomRpmh.c; do
             xcrun --sdk iphoneos clang -target arm64-apple-ios17.0 -isysroot "$sdk" -mkernel -ffreestanding -std=c11 \
               -mgeneral-regs-only -Wall -Wextra -Wconversion -Werror -O2 -c "$f" -o "/tmp/$(basename "$f" .c).o"
           done

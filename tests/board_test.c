@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: BSD-2-Clause-Patent
-// 主机侧测试：FuxiTouchBoard.h / FuxiPanelBoard.h 的板级常量与地址换算，并与 drivers/FuxiFtsTouch 的协议常量交叉核对。
-// 协议层和触点跟踪自己的测试在 drivers/FuxiFtsTouch/Test/。
-// 编译运行（WSL）: gcc -std=c11 -Wall -Wextra -Werror -I../package -I../drivers/FuxiFtsTouch board_test.c
-//   ../drivers/FuxiFtsTouch/FtsTouchCore.c -o /tmp/board_test && /tmp/board_test
+// 主机侧测试：FuxiTouchBoard.h / FuxiPanelBoard.h 的板级常量与地址换算，并与 package/FuxiFtsTouch 的协议常量交叉核对。
+// 协议层和触点跟踪自己的测试在 package/FuxiFtsTouch/Test/。
+// 编译运行（WSL）: gcc -std=c11 -Wall -Wextra -Werror -I../package -I../package/FuxiFtsTouch board_test.c
+//   ../package/FuxiFtsTouch/FtsTouchCore.c -o /tmp/board_test && /tmp/board_test
 #include <stdio.h>
 #include <string.h>
 #include "FtsProtocol.h"
