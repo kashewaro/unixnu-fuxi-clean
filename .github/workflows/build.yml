@@ -36,8 +36,61 @@ env:
   BRINGUP_SEED: "0x0123456789abcdef"
 
 jobs:
+  host-tests:
+    name: Touch stack host tests (gcc, clang; ASan, UBSan)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: FuxiFtsTouch protocol tests
+        run: |
+          flags="-std=c11 -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Werror -g -fsanitize=address,undefined"
+          cd drivers/FuxiFtsTouch
+          for t in fts-protocol touch-core; do
+            for cc in gcc clang; do
+              $cc $flags -I. Test/$t.c FtsProtocol.c FtsTouchCore.c -o /tmp/$t-$cc
+              /tmp/$t-$cc
+            done
+          done
+      - name: Board constants test
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -Ipackage -Idrivers/FuxiFtsTouch tests/board_test.c \
+            drivers/FuxiFtsTouch/FtsTouchCore.c -o /tmp/board_test
+          /tmp/board_test
+      - name: Scripts syntax
+        run: |
+          python3 -m py_compile scripts/*.py ci/*.py
+          bash -n ci/decrypt-boot-image.sh
+
+  apple-clang:
+    name: Kernel-target compile (Xcode clang)
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Select Xcode
+        run: |
+          dir="/Applications/Xcode_${XCODE}.app"
+          if [ ! -d "$dir" ]; then
+            dir=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1)
+          fi
+          [ -n "$dir" ] && [ -d "$dir" ] || { echo "::error::no Xcode 26 on this image"; exit 1; }
+          echo "DEVELOPER_DIR=$dir/Contents/Developer" >> "$GITHUB_ENV"
+      - name: Compile the touch C sources for arm64 iOS kernel code
+        run: |
+          sdk=$(xcrun --sdk iphoneos --show-sdk-path)
+          for f in drivers/FuxiFtsTouch/FtsProtocol.c drivers/FuxiFtsTouch/FtsTouchCore.c package/QcomRpmh.c; do
+            xcrun --sdk iphoneos clang -target arm64-apple-ios17.0 -isysroot "$sdk" -mkernel -ffreestanding -std=c11 \
+              -mgeneral-regs-only -Wall -Wextra -Wconversion -Werror -O2 -c "$f" -o "/tmp/$(basename "$f" .c).o"
+          done
+
   image:
     name: fuxi boot image (kernel, payload, firmware)
+    needs: host-tests
     runs-on: macos-26
     timeout-minutes: 240
     env:
@@ -98,13 +151,33 @@ jobs:
           kernel=$(find unixnu/out -path '*/tree/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837.unstripped.noctf' | head -n 1)
           [ -n "$kernel" ] || { echo "::error::linked kernel not found"; exit 1; }
           ls -l "$kernel"
+          # Touch probe + HID: the symbols bsd_init and the digitizer need.
+          nm -U "$kernel" > "$RUNNER_TEMP/kernel-symbols.txt"
+          missing=0
+          for s in _native_touch_probe _fuxi_hid_start _geni_spi_transfer _qcom_rpmh_active_request; do
+            line=$(grep -E " $s\$" "$RUNNER_TEMP/kernel-symbols.txt" || true)
+            if [ -n "$line" ]; then echo "defined: $line"; else echo "::error::missing from the kernel: $s"; missing=1; fi
+          done
+          # bsd_init must call the probe (patches/xnu/fuxi-touch-probe.patch).
+          "$(brew --prefix llvm)/bin/llvm-objdump" --disassemble-symbols=_bsd_init "$kernel" > "$RUNNER_TEMP/bsd_init.txt"
+          if grep -q '_native_touch_probe' "$RUNNER_TEMP/bsd_init.txt"; then
+            echo "bsd_init: $(grep -m 1 '_native_touch_probe' "$RUNNER_TEMP/bsd_init.txt")"
+          else
+            echo "::error::bsd_init does not call native_touch_probe"; missing=1
+          fi
           prelinked=$(find unixnu/out -path '*/kernel/kernel.macho' | head -n 1)
           if [ -n "$prelinked" ]; then ls -l "$prelinked"; shasum -a 256 "$prelinked"; else echo "::error::no prelinked kernel"; exit 1; fi
           # The PMGR bridge AMFI waits for (CONFIG_XNU_SHENG_PMGR): the AMFI -> PMGR instruction contract in the prelinked
           # kexts, ShengPlatformPower's provider table against the native IOPMGR vtable, and the call from bsd_init.
           if [ -n "$prelinked" ] && ! python3 fuxi/ci/check-pmgr-bridge.py "$prelinked"; then
-            echo "::error::PMGR bridge check failed"; exit 1
+            echo "::error::PMGR bridge check failed"; missing=1
           fi
+          # ShengHidInput's touch digitizer (scripts/build-fuxi-hid-input.py): its fixed IOHIDDevice bindings, the pinned
+          # IOHIDFamily instructions and NativeHidInput's vtable against the original one in the prelinked kernel.
+          if [ -n "$prelinked" ] && ! python3 fuxi/ci/check-hid-bindings.py "$prelinked"; then
+            echo "::error::HID binding check failed"; missing=1
+          fi
+          exit $missing
       - name: Build payload
         working-directory: unixnu
         run: ./unixnu build payload --device "$GITHUB_WORKSPACE/fuxi" --uefi "$GITHUB_WORKSPACE/uefi-fuxi" --unique-chip-id "$BRINGUP_SEED"

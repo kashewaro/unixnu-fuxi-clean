@@ -13,5 +13,8 @@ CONFIG_XNU_DT_PANIC_REGION=y
 # The bridge (scripts/build-fuxi-platform-power.py, boot arg sheng-pmgr=2) publishes
 # the original nub and refuses every power operation with a panic.
 CONFIG_XNU_SHENG_PMGR=y
+# The HID digitizer (scripts/build-fuxi-hid-input.py) and the FTM5 probe
+# (scripts/build-fuxi-touch.py, called from bsd_init): force-loaded archives.
+CONFIG_XNU_EXTRA_LD_ARCHIVES="{tree}/build/fuxi-touch/libFuxiTouch.a -Wl,-force_load,{tree}/build/sheng-hid-input/libShengHidInput.a"
 # CONFIG_XNU_NATIVE_UFS is not set (Task 5)
 # CONFIG_XNU_NATIVE_ADRENO is not set

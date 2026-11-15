@@ -15,8 +15,10 @@ description = "Xiaomi 13"
 kit = "fuxi"
 
 [components]
-# Task 3 baseline: platform + CPU + crypto only. UFS/touch join in Task 4-5.
-include = ["ArmDTPlatform", "ArmCpu", "SoftwareAES", "XnuPrelink", "DarwinBoot"]
+# Task 4: QcomGeniSpi (upstream SPI engine the FTM5 hangs off) + FuxiFtsTouch
+# (vendored ST FTM5 protocol in drivers/FuxiFtsTouch, built by
+# scripts/build-fuxi-touch.py; the HID digitizer by build-fuxi-hid-input.py).
+include = ["ArmDTPlatform", "ArmCpu", "SoftwareAES", "XnuPrelink", "DarwinBoot", "QcomGeniSpi", "FuxiFtsTouch"]
 
 [kernel]
 defconfig = "fuxi_defconfig"
@@ -35,6 +37,8 @@ archives = [
   "build-mockfs-fixture.py",
   "build-libpthread-kernel.py",
   "build-fuxi-platform-power.py",
+  "build-fuxi-hid-input.py",
+  "build-fuxi-touch.py",
 ]
 
 [device_tree]
@@ -90,7 +94,10 @@ loader = "firmware"
 title = "UniXNU"
 # Baseline: verbose + serial + debug. sheng-pmgr=2 publishes the original ApplePMGRNub
 # AMFI waits for (the bridge refuses every power operation, it is not power management).
-kernel_args = ["-v", "serial=3", "debug=0x14e", "sheng-smp=1", "armcpu-spi-ipi=1", "armcpu-self-ipi=1", "sheng-pmgr=2"]
+# fuxi-touch=4 runs the FTM5 probe through sensing, fuxi-touch-hid=1 starts the HID
+# digitizer (sheng-touch-hid=1 gives it the collection), fuxi-touch-panic=2 panics
+# with the probe rows after the first lift so the table can be read from the screen.
+kernel_args = ["-v", "serial=3", "debug=0x14e", "sheng-smp=1", "armcpu-spi-ipi=1", "armcpu-self-ipi=1", "sheng-pmgr=2", "fuxi-touch=4", "fuxi-touch-hid=1", "sheng-touch-hid=1", "fuxi-touch-panic=2"]
 
 [payload.adt]
 chip_id = "207"

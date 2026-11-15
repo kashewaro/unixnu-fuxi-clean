@@ -64,14 +64,14 @@ evidence = []
 
 [[area]]
 id = "input"
-status = "planned"
-components = []
-paths = []
+status = "in_progress"
+components = ["QcomGeniSpi", "FuxiFtsTouch"]
+paths = ["drivers/FuxiFtsTouch/**", "package/FuxiTouch*.cpp", "package/FuxiTouch*.h", "package/*Hid*.cpp", "package/QcomRpmh.*", "scripts/build-fuxi-touch.py", "scripts/build-fuxi-hid-input.py", "scripts/fuxi_hid_abi.py", "patches/xnu/fuxi-touch-probe.patch", "tests/board_test.c", "ci/check-hid-bindings.py"]
 inputs = ["ST FTM5 only (Novatek driver forbidden)", "touch args fuxi-touch=4 fuxi-touch-hid=1 sheng-touch-hid=1 fuxi-touch-panic=2"]
-configuration = ["Vendored FTM5 sources with ORIGIN.md + BSD-2-Clause-Patent"]
-procedure = ["Boot, touch screen, eye-read probe table (no photo: transcribe rows by hand)."]
+configuration = ["Vendored FTM5 sources with ORIGIN.md + BSD-2-Clause-Patent", "QcomGeniSpi from upstream components"]
+procedure = ["Boot, touch screen, transcribe probe table by hand (no camera)."]
 findings = []
 completion = ["HID input works; probe table readable."]
 limits = ["No camera: rows transcribed manually, double-checked by second boot."]
-next_action = ["Task 4 after baseline kernel boots."]
+next_action = ["First touch boot after CI build."]
 evidence = []
