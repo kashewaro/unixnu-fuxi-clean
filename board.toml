@@ -61,7 +61,11 @@ text_offset = 0
 
 [payload]
 volume = "FUXIESP"
-size_mib = 256
+# ABL fuxi boots an 11 MB image but hangs on 144/270 MB ones (black screen,
+# stays in fastboot). Probe with a tight volume: kernel (~52 MB) + trustcache
+# + ADT fit in 80 MiB; total image ~85 MB. If this still hangs, the next probe
+# is a firmware-only (ramdisk none) menu image.
+size_mib = 80
 loader = "firmware"
 title = "UniXNU"
 # Baseline: verbose + serial + debug. Touch/UFS args join in Task 4-5.
