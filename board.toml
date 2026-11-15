@@ -66,6 +66,11 @@ volume = "FUXIESP"
 # + ADT fit in 80 MiB; total image ~85 MB. If this still hangs, the next probe
 # is a firmware-only (ramdisk none) menu image.
 size_mib = 80
+panic_screen = true
+# Entry probe: blue bar = kernel entry ran (MMU off), magenta = reached the
+# point before MMU enable, then PSCI reset 6 s after MMU is on. A reboot ~6 s
+# after the green bar proves MMU enable completed.
+entry_probe_reset_delay = 6
 loader = "firmware"
 title = "UniXNU"
 # Baseline: verbose + serial + debug. Touch/UFS args join in Task 4-5.
