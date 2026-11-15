@@ -23,10 +23,12 @@
 
 extern "C" {
 
-__attribute__((used)) const NativeVerifiedBlockPolicy verified_root_policies[1] = {};
-__attribute__((used)) const uint64_t verified_root_policy_count = 0;
-__attribute__((used)) const uint8_t verified_root_key[VR_KEY_BYTES] = {};
-__attribute__((used)) const struct vr_crypto vr_xnu_crypto = {0, 0};
+// NOTE: namespace-scope const has internal linkage in C++, which would leave
+// these two undefined at link; the explicit extern gives them external linkage.
+__attribute__((used)) extern const NativeVerifiedBlockPolicy verified_root_policies[1] = {};
+__attribute__((used)) extern const uint64_t verified_root_policy_count = 0;
+__attribute__((used)) extern const uint8_t verified_root_key[VR_KEY_BYTES] = {};
+__attribute__((used)) extern const struct vr_crypto vr_xnu_crypto = {0, 0};
 
 int
 vr_open (const uint8_t *envelope, size_t envelopeBytes, const uint8_t key[VR_KEY_BYTES], uint64_t generation,
