@@ -50,22 +50,22 @@ evidence = []
 
 [[area]]
 id = "storage"
-status = "planned"
-components = []
-paths = []
+status = "in_progress"
+components = ["ShengUfs"]
+paths = ["board.toml"]
 inputs = ["UFS HC 0x1d84000/0x3000 PHY 0x1d80000", "userdata tail carve planned in Task 7", "verified chain needs audit inputs (spike open)"]
-configuration = ["native-ufs-probe staged 2 then 3, plain build without NATIVE_VERIFIED_BLOCK"]
-procedure = ["Vendor UniXNU/ShengUfs sources, device-local build script, probe via eye-read checkpoints."]
+configuration = ["CONFIG_XNU_NATIVE_UFS=y, upstream ShengUfs component (component:ShengUfs pulls VirtioMmioBlock archive + VerifiedRoot kit, neither linked without their flags)", "native-ufs-probe=2 read-only first", "[userdata] first_lba 3635264 last_lba 61850616 lba_bytes 4096"]
+procedure = ["Boot, eye-read probe lines (HC version, link, SMMU, slots); then raise to =3."]
 findings = ["Verified audit/bindings do not build for 17.7.11 on fresh tree; staged as phase 2."]
 completion = ["Probe prints HC version, link HS-G5, SMMU, slots; then block reads."]
 limits = []
-next_action = ["Task 5 after touch works."]
+next_action = ["First UFS boot after CI build."]
 evidence = []
 
 [[area]]
 id = "input"
 status = "in_progress"
-components = ["QcomGeniSpi", "FuxiFtsTouch"]
+components = ["QcomGeniSpi"]
 paths = ["package/FuxiFtsTouch/**", "package/FuxiTouch*.cpp", "package/FuxiTouch*.h", "package/*Hid*.cpp", "package/QcomRpmh.*", "scripts/build-fuxi-touch.py", "scripts/build-fuxi-hid-input.py", "scripts/fuxi_hid_abi.py", "patches/xnu/fuxi-touch-probe.patch", "tests/board_test.c", "ci/check-hid-bindings.py"]
 inputs = ["ST FTM5 only (Novatek driver forbidden)", "touch args fuxi-touch=4 fuxi-touch-hid=1 sheng-touch-hid=1 fuxi-touch-panic=2"]
 configuration = ["Vendored FTM5 sources with ORIGIN.md + BSD-2-Clause-Patent", "QcomGeniSpi from upstream components"]

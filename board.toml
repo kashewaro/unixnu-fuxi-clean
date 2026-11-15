@@ -14,12 +14,20 @@ os_profile = "ipados-17.7.11-21H461"
 description = "Xiaomi 13"
 kit = "fuxi"
 
+[userdata]
+# GPT "userdata" of UFS LUN 0, measured in TWRP on this 8/256 unit (blockdev/sda32):
+# 512B start 29082112 size 465722824 -> 4096B first_lba 3635264 last_lba 61850616.
+# Android data occupies the head (~72 GB used); the unixnu carve (Task 7) takes the tail.
+first_lba = 3635264
+last_lba = 61850616
+lba_bytes = 4096
+
 [components]
 # Task 4: QcomGeniSpi (upstream SPI engine the FTM5 hangs off). The FTM5 protocol
 # itself (package/FuxiFtsTouch) is NOT an upstream catalog component — it is built
 # by scripts/build-fuxi-touch.py straight from the vendored sources; the HID
 # digitizer by build-fuxi-hid-input.py.
-include = ["ArmDTPlatform", "ArmCpu", "SoftwareAES", "XnuPrelink", "DarwinBoot", "QcomGeniSpi"]
+include = ["ArmDTPlatform", "ArmCpu", "SoftwareAES", "XnuPrelink", "DarwinBoot", "QcomGeniSpi", "ShengUfs"]
 
 [kernel]
 defconfig = "fuxi_defconfig"
@@ -35,6 +43,7 @@ archives = [
   "component:ArmCpu",
   "component:SoftwareAES",
   "build-software-aes-bindings.py",
+  "component:ShengUfs",
   "build-mockfs-fixture.py",
   "build-libpthread-kernel.py",
   "build-fuxi-platform-power.py",
@@ -98,7 +107,7 @@ title = "UniXNU"
 # fuxi-touch=4 runs the FTM5 probe through sensing, fuxi-touch-hid=1 starts the HID
 # digitizer (sheng-touch-hid=1 gives it the collection), fuxi-touch-panic=2 panics
 # with the probe rows after the first lift so the table can be read from the screen.
-kernel_args = ["-v", "serial=3", "debug=0x14e", "sheng-smp=1", "armcpu-spi-ipi=1", "armcpu-self-ipi=1", "sheng-pmgr=2", "fuxi-touch=4", "fuxi-touch-hid=1", "sheng-touch-hid=1", "fuxi-touch-panic=2"]
+kernel_args = ["-v", "serial=3", "debug=0x14e", "sheng-smp=1", "armcpu-spi-ipi=1", "armcpu-self-ipi=1", "sheng-pmgr=2", "fuxi-touch=4", "fuxi-touch-hid=1", "sheng-touch-hid=1", "fuxi-touch-panic=2", "native-ufs-probe=2"]
 
 [payload.adt]
 chip_id = "207"
