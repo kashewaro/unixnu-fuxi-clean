@@ -9,5 +9,9 @@ CONFIG_XNU_CRYPTO_BOOTSTRAP="prelinked"
 # Raspberry Pi 3) in PE_create_console and zeroes 16 KiB there. On SM8550 no RAM covers
 # that address, so the region must come from the device tree.
 CONFIG_XNU_DT_PANIC_REGION=y
+# AMFI waits for an ApplePMGRNub and panics with "AMFI: No PMGR?" without one.
+# The bridge (scripts/build-fuxi-platform-power.py, boot arg sheng-pmgr=2) publishes
+# the original nub and refuses every power operation with a panic.
+CONFIG_XNU_SHENG_PMGR=y
 # CONFIG_XNU_NATIVE_UFS is not set (Task 5)
 # CONFIG_XNU_NATIVE_ADRENO is not set

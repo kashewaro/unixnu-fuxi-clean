@@ -22,6 +22,10 @@ include = ["ArmDTPlatform", "ArmCpu", "SoftwareAES", "XnuPrelink", "DarwinBoot"]
 defconfig = "fuxi_defconfig"
 config_fragments = ["arch:configs/common.config", "soc:configs/sm8550.config", "os:configs/ipados.config"]
 patch_series = ["arch:patches/xnu/series", "soc:patches/xnu/series", "os:patches/xnu/series", "device:patches/xnu/series"]
+# Auxiliary archives, built after the default component recipes: the guarded
+# original-PMGR bridge AMFI waits for (scripts/build-fuxi-platform-power.py,
+# force-loaded when CONFIG_XNU_SHENG_PMGR=1).
+archives = ["build-fuxi-platform-power.py"]
 
 [device_tree]
 source = "device:dts/fuxi.dts"
@@ -74,8 +78,9 @@ size_mib = 80
 panic_screen = true
 loader = "firmware"
 title = "UniXNU"
-# Baseline: verbose + serial + debug. Touch/UFS args join in Task 4-5.
-kernel_args = ["-v", "serial=3", "debug=0x14e", "sheng-smp=1", "armcpu-spi-ipi=1", "armcpu-self-ipi=1"]
+# Baseline: verbose + serial + debug. sheng-pmgr=2 publishes the original ApplePMGRNub
+# AMFI waits for (the bridge refuses every power operation, it is not power management).
+kernel_args = ["-v", "serial=3", "debug=0x14e", "sheng-smp=1", "armcpu-spi-ipi=1", "armcpu-self-ipi=1", "sheng-pmgr=2"]
 
 [payload.adt]
 chip_id = "207"

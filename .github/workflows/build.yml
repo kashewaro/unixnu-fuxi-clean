@@ -100,6 +100,11 @@ jobs:
           ls -l "$kernel"
           prelinked=$(find unixnu/out -path '*/kernel/kernel.macho' | head -n 1)
           if [ -n "$prelinked" ]; then ls -l "$prelinked"; shasum -a 256 "$prelinked"; else echo "::error::no prelinked kernel"; exit 1; fi
+          # The PMGR bridge AMFI waits for (CONFIG_XNU_SHENG_PMGR): the AMFI -> PMGR instruction contract in the prelinked
+          # kexts, ShengPlatformPower's provider table against the native IOPMGR vtable, and the call from bsd_init.
+          if [ -n "$prelinked" ] && ! python3 fuxi/ci/check-pmgr-bridge.py "$prelinked"; then
+            echo "::error::PMGR bridge check failed"; exit 1
+          fi
       - name: Build payload
         working-directory: unixnu
         run: ./unixnu build payload --device "$GITHUB_WORKSPACE/fuxi" --uefi "$GITHUB_WORKSPACE/uefi-fuxi" --unique-chip-id "$BRINGUP_SEED"
