@@ -19,6 +19,9 @@ CONFIG_XNU_SHENG_PMGR=y
 CONFIG_XNU_NATIVE_UFS=y
 # The HID digitizer (scripts/build-fuxi-hid-input.py) and the FTM5 probe
 # (scripts/build-fuxi-touch.py, called from bsd_init): force-loaded archives.
-CONFIG_XNU_EXTRA_LD_ARCHIVES="{tree}/build/fuxi-touch/libFuxiTouch.a -Wl,-force_load,{tree}/build/sheng-hid-input/libShengHidInput.a"
+# The UFS probe (scripts/build-fuxi-ufs.py): pinned IOBlockStorageDevice imports
+# plus probe-only VerifiedRoot stubs, force-loaded after libShengUfs.a so the
+# driver's references resolve.
+CONFIG_XNU_EXTRA_LD_ARCHIVES="{tree}/build/fuxi-touch/libFuxiTouch.a -Wl,-force_load,{tree}/build/sheng-hid-input/libShengHidInput.a -Wl,-force_load,{tree}/build/fuxi-ufs/libFuxiUfs.a"
 # CONFIG_XNU_NATIVE_UFS is not set (Task 5)
 # CONFIG_XNU_NATIVE_ADRENO is not set

@@ -54,7 +54,7 @@ status = "in_progress"
 components = ["ShengUfs"]
 paths = ["board.toml"]
 inputs = ["UFS HC 0x1d84000/0x3000 PHY 0x1d80000", "userdata tail carve planned in Task 7", "verified chain needs audit inputs (spike open)"]
-configuration = ["CONFIG_XNU_NATIVE_UFS=y, upstream ShengUfs component (component:ShengUfs pulls VirtioMmioBlock archive + VerifiedRoot kit, neither linked without their flags)", "native-ufs-probe=2 read-only first", "[userdata] first_lba 3635264 last_lba 61850616 lba_bytes 4096"]
+configuration = ["CONFIG_XNU_NATIVE_UFS=y, upstream ShengUfs component (component:ShengUfs pulls VirtioMmioBlock archive + VerifiedRoot kit, neither linked without their flags)", "probe-only link: scripts/build-fuxi-ufs.py assembles the pinned IOBlockStorageDevice imports + VerifiedRoot stubs into libFuxiUfs.a (force-loaded after libShengUfs.a); no verified bundles, no live QEMU capture (SadNutWall/xrc111/marble pattern)", "native-ufs-probe=2 read-only first", "[userdata] first_lba 3635264 last_lba 61850616 lba_bytes 4096"]
 procedure = ["Boot, eye-read probe lines (HC version, link, SMMU, slots); then raise to =3."]
 findings = ["Verified audit/bindings do not build for 17.7.11 on fresh tree; staged as phase 2."]
 completion = ["Probe prints HC version, link HS-G5, SMMU, slots; then block reads."]

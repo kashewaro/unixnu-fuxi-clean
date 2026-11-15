@@ -16,6 +16,12 @@ scripts/build-fuxi-touch.py reads them from there.
   (itself derived from `UniXNU-sheng`, see file headers).
 - `package/NativeHidInput.cpp` — unchanged copy of UniXNU `ShengHidInput`
   (see `scripts/fuxi_hid_abi.py` for the pinned kernelcache addresses).
+- `package/fuxi-storage-original-bindings.S` — unchanged copy of SadNutWall's
+  fuxi record (pinned IOBlockStorageDevice imports for the unchanged iPadOS
+  17.7.11 kernelcache); lets ShengUfs link without the live QEMU storage
+  capture. BSD-2-Clause-Patent, see the file header.
+- `package/FuxiUfsPolicyStub.cpp` — our probe-only VerifiedRoot stubs
+  (empty policy, zero count, refusing entries, no-op progress observer).
 - `scripts/build-fuxi-touch.py` (paths adapted to package/FuxiFtsTouch),
   `scripts/build-fuxi-hid-input.py`, `scripts/fuxi_hid_abi.py`,
   `patches/xnu/fuxi-touch-probe.patch`, `tests/board_test.c`,

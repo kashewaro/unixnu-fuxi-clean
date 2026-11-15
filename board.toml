@@ -49,6 +49,7 @@ archives = [
   "build-fuxi-platform-power.py",
   "build-fuxi-hid-input.py",
   "build-fuxi-touch.py",
+  "build-fuxi-ufs.py",
 ]
 
 [device_tree]
