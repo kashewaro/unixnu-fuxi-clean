@@ -1,0 +1,77 @@
+schema_version = 1
+
+[device]
+name = "fuxi"
+soc = "SM8550"
+os_profile = "ipados-17.7.11-21H461"
+summary = "Xiaomi 13 (8/256, unlocked bootloader) clean bring-up on upstream UniXNU. fastboot boot only."
+
+[[area]]
+id = "configuration"
+status = "in_progress"
+components = ["ArmDTPlatform", "ArmCpu", "SoftwareAES", "XnuPrelink", "DarwinBoot"]
+paths = ["board.toml", "feeds.toml", "configs/fuxi_defconfig", "dts/fuxi.dts", ".github/workflows/build.yml"]
+inputs = ["SM8550 v2 soc_id 519", "8 GB RAM (uefi-fuxi c5793bc2 map)", "FTM5 fw 53.42 vendor 56 SPI0", "panel m3_38_0c_0a", "UFS HC 0x1d84000", "userdata 4096B 3635264..61850616"]
+configuration = ["board fuxi, soc_source sm8550, kit fuxi, chip_id 207, owned 0x130000000", "v0 bootimg, text_offset 0, payload after FV"]
+procedure = ["./unixnu defconfig/fetch/status/tree with UniXNU upstream, then Actions kernel build"]
+findings = ["Clean skeleton from upstream examples/device; no forked dependencies (SoC feed is UniXNU upstream)."]
+completion = ["defconfig/fetch/status/tree PASS locally; kernel build green on macos-26"]
+limits = ["No camera/second phone: evidence is eye-read checkpoints + TWRP/ADB log pulls, no panic photos."]
+next_action = ["Run local defconfig/fetch/status/tree, then push and trigger Build."]
+evidence = []
+
+[[area]]
+id = "firmware"
+status = "planned"
+components = []
+paths = ["dts/fuxi.dts", "board.toml"]
+inputs = ["uefi-fuxi branch fuxi c5793bc2 (8 GB map)", "DTB sm8550-xiaomi-fuxi.dtb", "splash 0xb8000000+0x2b00000"]
+configuration = ["fuxi.dsc, SILICIUM_UEFI.fd, Gic-Spurious patch", "DarwinBoot window 0x8C007C000+0x130000000"]
+procedure = ["Build firmware on macos-26, fastboot boot, expect UEFI menu / DarwinBoot green bar."]
+findings = []
+completion = ["Firmware reaches UniXNU menu, framebuffer alive, splash preserved."]
+limits = ["ABL rejects 144 MB images; keep test images small until userdata stage."]
+next_action = ["Verify firmware integration after first green kernel build."]
+evidence = []
+
+[[area]]
+id = "cpu"
+status = "planned"
+components = ["ArmCpu"]
+paths = ["configs/fuxi_defconfig", "board.toml"]
+inputs = ["sheng-smp=1, armcpu-spi-ipi=1, armcpu-self-ipi=1", "CONFIG_XNU_DT_PANIC_REGION=y"]
+configuration = ["8 cores E/P clusters in DTS"]
+procedure = ["Boot to bsd_init, eye-read green bar / panic provider name."]
+findings = []
+completion = ["Kernel reaches bsd_init; 'Failed to mount root' expected without storage."]
+limits = []
+next_action = ["First boot after Task 3 build."]
+evidence = []
+
+[[area]]
+id = "storage"
+status = "planned"
+components = []
+paths = []
+inputs = ["UFS HC 0x1d84000/0x3000 PHY 0x1d80000", "userdata tail carve planned in Task 7", "verified chain needs audit inputs (spike open)"]
+configuration = ["native-ufs-probe staged 2 then 3, plain build without NATIVE_VERIFIED_BLOCK"]
+procedure = ["Vendor UniXNU/ShengUfs sources, device-local build script, probe via eye-read checkpoints."]
+findings = ["Verified audit/bindings do not build for 17.7.11 on fresh tree; staged as phase 2."]
+completion = ["Probe prints HC version, link HS-G5, SMMU, slots; then block reads."]
+limits = []
+next_action = ["Task 5 after touch works."]
+evidence = []
+
+[[area]]
+id = "input"
+status = "planned"
+components = []
+paths = []
+inputs = ["ST FTM5 only (Novatek driver forbidden)", "touch args fuxi-touch=4 fuxi-touch-hid=1 sheng-touch-hid=1 fuxi-touch-panic=2"]
+configuration = ["Vendored FTM5 sources with ORIGIN.md + BSD-2-Clause-Patent"]
+procedure = ["Boot, touch screen, eye-read probe table (no photo: transcribe rows by hand)."]
+findings = []
+completion = ["HID input works; probe table readable."]
+limits = ["No camera: rows transcribed manually, double-checked by second boot."]
+next_action = ["Task 4 after baseline kernel boots."]
+evidence = []
