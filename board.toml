@@ -22,10 +22,20 @@ include = ["ArmDTPlatform", "ArmCpu", "SoftwareAES", "XnuPrelink", "DarwinBoot"]
 defconfig = "fuxi_defconfig"
 config_fragments = ["arch:configs/common.config", "soc:configs/sm8550.config", "os:configs/ipados.config"]
 patch_series = ["arch:patches/xnu/series", "soc:patches/xnu/series", "os:patches/xnu/series", "device:patches/xnu/series"]
-# Auxiliary archives, built after the default component recipes: the guarded
-# original-PMGR bridge AMFI waits for (scripts/build-fuxi-platform-power.py,
-# force-loaded when CONFIG_XNU_SHENG_PMGR=1).
-archives = ["build-fuxi-platform-power.py"]
+# Auxiliary archives. NOTE: this list REPLACES the arch profile defaults
+# (profiles/arch/arm64/profile.toml), it does not extend them — so the eight
+# defaults are repeated here verbatim, with our script appended last.
+archives = [
+  "build-corecrypto-14.py",
+  "build-corecrypto-14.py --namespace",
+  "component:ArmDTPlatform",
+  "component:ArmCpu",
+  "component:SoftwareAES",
+  "build-software-aes-bindings.py",
+  "build-mockfs-fixture.py",
+  "build-libpthread-kernel.py",
+  "build-fuxi-platform-power.py",
+]
 
 [device_tree]
 source = "device:dts/fuxi.dts"
