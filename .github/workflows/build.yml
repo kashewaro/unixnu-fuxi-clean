@@ -283,6 +283,11 @@ jobs:
       - name: Assemble the build tree
         working-directory: unixnu
         run: ./unixnu tree --device "$GITHUB_WORKSPACE/fuxi"
+      - name: Build the kernel objects (probe compile records)
+        working-directory: unixnu
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: ./unixnu build kernel --device "$GITHUB_WORKSPACE/fuxi"
       - name: Stage the original disk images
         working-directory: unixnu
         run: |
@@ -297,6 +302,10 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/fuxi/.cache/firmware/target-volumes"
           cp "$dmg" "$sys" "$GITHUB_WORKSPACE/fuxi/.cache/firmware/target-volumes/"
           ls -l "$GITHUB_WORKSPACE/fuxi/.cache/firmware/target-volumes/"
+      - name: Generate the owner key pair
+        run: python3 "$tree/kits/VerifiedRoot/tests/check.py" --output "$tree/build/verified-root-host" --openssl-prefix "$(brew --prefix openssl@3)"
+        env:
+          tree: ${{ env.tree }}
       - name: Sign the OS policy (real C verification)
         run: |
           python3 - <<'EOF'
