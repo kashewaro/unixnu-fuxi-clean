@@ -356,7 +356,7 @@ jobs:
           EOF
           dev=$(hdiutil attach -nomount -readonly -noverify -noautofsck "$GITHUB_WORKSPACE/fuxi/.cache/firmware/target-volumes/044-76034-038.dmg" | grep -m 1 -o '/dev/disk[0-9]*')
           echo "sys_dev=$dev" >> "$GITHUB_ENV"
-          diskutil apfs list -plist "$dev" > /tmp/sysapfs.plist
+          diskutil apfs list -plist > /tmp/sysapfs.plist
           python3 -c "import plistlib; info=plistlib.load(open('/tmp/sysapfs.plist','rb')); vols=[v for c in info['Containers'] for v in c['Volumes']]; print('\n'.join(v['VolumeUUID']+' '+v.get('Name','') for v in vols))"
       - name: Sign the SystemOS policy
         run: |
