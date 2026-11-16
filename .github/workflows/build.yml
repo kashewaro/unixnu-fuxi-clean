@@ -280,6 +280,84 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: ./unixnu build userdata --device "$GITHUB_WORKSPACE/fuxi"
+      - name: Stage the original disk images
+        working-directory: unixnu
+        run: |
+          tree=$(find "$GITHUB_WORKSPACE/unixnu/out" -maxdepth 4 -type d -name tree | head -n 1)
+          echo "tree=$tree" >> "$GITHUB_ENV"
+          dmg=$(find "$GITHUB_WORKSPACE/unixnu/out/ipsw" -name '044-76040-038.dmg' | head -n 1)
+          sys=$(find "$GITHUB_WORKSPACE/unixnu/out/ipsw" -name '044-76034-038.dmg' | head -n 1)
+          [ -n "$dmg" ] && [ -n "$sys" ] || { echo "::error::original OS/SystemOS dmgs not found"; exit 1; }
+          echo "os_dmg=$dmg" >> "$GITHUB_ENV"
+          echo "sys_dmg=$sys" >> "$GITHUB_ENV"
+          mkdir -p "$GITHUB_WORKSPACE/fuxi/.cache/firmware/target-volumes"
+          cp "$dmg" "$sys" "$GITHUB_WORKSPACE/fuxi/.cache/firmware/target-volumes/"
+          ls -l "$GITHUB_WORKSPACE/fuxi/.cache/firmware/target-volumes/"
+      - name: Assemble the build tree
+        working-directory: unixnu
+        run: ./unixnu tree --device "$GITHUB_WORKSPACE/fuxi"
+      - name: Sign the OS policy (real C verification)
+        run: |
+          hdiutil attach -nomount -readonly -noverify -noautofsck "$OS_DMG"
+          python3 "$tree/scripts/build-owner-os-policy.py"
+        env:
+          tree: ${{ env.tree }}
+          OS_DMG: ${{ env.os_dmg }}
+      - name: Discover the SystemOS volume UUID
+        run: |
+          dev=$(hdiutil attach -nomount -readonly -noverify -noautofsck "$sys_dmg" | grep -m 1 -o '/dev/disk[0-9]*')
+          echo "sys_dev=$dev" >> "$GITHUB_ENV"
+          diskutil apfs list -plist "$dev" > /tmp/sysapfs.plist
+          python3 -c "import plistlib; info=plistlib.load(open('/tmp/sysapfs.plist','rb')); vols=[v for c in info['Containers'] for v in c['Volumes']]; print('\n'.join(v['VolumeUUID']+' '+v.get('Name','') for v in vols))"
+      - name: Sign the SystemOS policy
+        run: |
+          dd if="/dev/r${SYS_DEV#/dev/}" of="$RUNNER_TEMP/systemos.raw" bs=1m status=none
+          SYS_UUID=$(python3 -c "import plistlib; info=plistlib.load(open('/tmp/sysapfs.plist','rb')); vols=[v for c in info['Containers'] for v in c['Volumes']]; print([v['VolumeUUID'] for v in vols if v.get('Name')=='SystemOS'][0])")
+          echo "sys_uuid=$SYS_UUID" >> "$GITHUB_ENV"
+          python3 "$tree/scripts/make-root-policies.py" --tree "$tree" \
+            --output "$tree/build/verified-root-policies" \
+            --window "SystemOS=$RUNNER_TEMP/systemos.raw:$SYS_UUID"
+        env:
+          tree: ${{ env.tree }}
+          SYS_DEV: ${{ env.sys_dev }}
+      - name: Assemble the probe bundle layout
+        run: |
+          mkdir -p "$tree/build/verified-root-systemos"
+          cp "$tree/build/verified-root-SystemOS/manifest.bin" "$tree/build/verified-root-systemos/manifest.bin"
+          cp "$tree/build/verified-root-policies/SystemOS/verification.json" "$tree/build/verified-root-systemos/verification.json"
+          cp "$tree/build/verified-root-policies/SystemOS/trusted-key.bin" "$tree/build/verified-root-systemos/trusted-key.bin"
+          ls -l "$tree/build/verified-root-os" "$tree/build/verified-root-systemos"
+        env:
+          tree: ${{ env.tree }}
+      - name: Build the verified-root probe bundle
+        run: python3 "$tree/scripts/build-verified-root-probe.py" --component os --include-systemos
+        env:
+          tree: ${{ env.tree }}
+      - name: Encrypt the policy bundle
+        run: |
+          openssl="$(brew --prefix openssl@3)/bin/openssl"
+          cd "$tree/build/verified-root-os-xnu-bundle"
+          ls -l
+          "$openssl" rand -hex 32 > bundle.key
+          tar -cf bundle.tar libVerifiedRootProbe.a inputs.json
+          "$openssl" enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -in bundle.tar -out bundle.tar.enc -pass file:bundle.key
+          "$openssl" pkeyutl -encrypt -pubin -inkey "$GITHUB_WORKSPACE/fuxi/ci/boot-image-recipient.pem" \
+            -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 -in bundle.key -out bundle.key.enc
+          rm -f bundle.key bundle.tar
+          mkdir -p "$RUNNER_TEMP/encrypted"
+          mv bundle.tar.enc bundle.key.enc "$RUNNER_TEMP/encrypted/"
+          cp "$tree/build/verified-root-os/verification.json" "$tree/build/verified-root-systemos/verification.json" \
+            "$RUNNER_TEMP/encrypted/"
+          ls -l "$RUNNER_TEMP/encrypted"
+        env:
+          tree: ${{ env.tree }}
+      - name: Upload the encrypted policy bundle
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuxi-verified-bundle-encrypted-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/encrypted/*
+          if-no-files-found: error
+          retention-days: 7
       - name: Encrypt the userdata image
         run: |
           # The image carries Apple disk images, so it leaves the runner only encrypted.
@@ -324,4 +402,8 @@ jobs:
           retention-days: 7
       - name: Remove proprietary inputs
         if: always()
-        run: rm -rf unixnu/out/ipsw unixnu/out/feeds
+        run: |
+          if [ -n "${sys_dev:-}" ]; then hdiutil detach -force "$sys_dev" 2>/dev/null || true; fi
+          os_dev=$(hdiutil info -plist 2>/dev/null | python3 -c "import plistlib,sys; info=plistlib.load(sys.stdin.buffer); print('\n'.join(i['dev-entry'] for i in info['images'] if '044-76040-038.dmg' in i.get('image-path','')))" 2>/dev/null || true)
+          if [ -n "${os_dev:-}" ]; then hdiutil detach -force "$os_dev" 2>/dev/null || true; fi
+          rm -rf unixnu/out/ipsw unixnu/out/feeds
