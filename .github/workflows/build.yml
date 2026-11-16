@@ -396,7 +396,10 @@ jobs:
       - name: Assemble the probe bundle layout
         run: |
           mkdir -p "$tree/build/verified-root-systemos"
-          cp "$tree/build/verified-root-SystemOS/manifest.bin" "$tree/build/verified-root-systemos/manifest.bin"
+          # On case-insensitive macOS verified-root-systemos IS verified-root-SystemOS: skip the self-copy.
+          if ! cmp -s "$tree/build/verified-root-SystemOS/manifest.bin" "$tree/build/verified-root-systemos/manifest.bin" 2>/dev/null; then
+            cp "$tree/build/verified-root-SystemOS/manifest.bin" "$tree/build/verified-root-systemos/manifest.bin"
+          fi
           cp "$tree/build/verified-root-policies/SystemOS/verification.json" "$tree/build/verified-root-systemos/verification.json"
           cp "$tree/build/verified-root-policies/SystemOS/trusted-key.bin" "$tree/build/verified-root-systemos/trusted-key.bin"
           ls -l "$tree/build/verified-root-os" "$tree/build/verified-root-systemos"
