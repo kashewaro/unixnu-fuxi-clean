@@ -22,6 +22,14 @@ scripts/build-fuxi-touch.py reads them from there.
   capture. BSD-2-Clause-Patent, see the file header.
 - `package/FuxiUfsPolicyStub.cpp` — our probe-only VerifiedRoot stubs
   (empty policy, zero count, refusing entries, no-op progress observer).
+- `drivers/ShengUfs/` — unchanged UniXNU/ShengUfs sources at the pinned
+  component revision 99d8bcd, EXCEPT the fuxi dual-boot delta: RootLayout.h
+  takes the wanted GPT partition name as a parameter (default "userdata"),
+  NativeUfs.cpp sets it from the `native-ufs-partition` boot argument in
+  `start()`. Without the argument behavior is identical to upstream.
+  Rationale: `findRootLayout` hardcodes "userdata", which collides with the
+  Android partition after carving; the carved "unixnu" partition needs
+  `native-ufs-partition=unixnu`. BSD-2-Clause-Patent, see LICENSE.
 - `scripts/build-fuxi-touch.py` (paths adapted to package/FuxiFtsTouch),
   `scripts/build-fuxi-hid-input.py`, `scripts/fuxi_hid_abi.py`,
   `patches/xnu/fuxi-touch-probe.patch`, `tests/board_test.c`,
