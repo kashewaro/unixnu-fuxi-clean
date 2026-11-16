@@ -243,3 +243,85 @@ jobs:
       - name: Remove proprietary inputs
         if: always()
         run: rm -rf unixnu/out/ipsw unixnu/out/feeds fuxi/.cache/firmware "$RUNNER_TEMP/image" unixnu/out/*/*/*/payload
+
+  userdata:
+    name: fuxi userdata root image (OS + SystemOS windows)
+    runs-on: macos-26
+    timeout-minutes: 240
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: 1
+      HOMEBREW_NO_INSTALL_CLEANUP: 1
+      HOMEBREW_NO_ENV_HINTS: 1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: fuxi
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ env.UNIXNU_REPO }}
+          ref: ${{ env.UNIXNU_REF }}
+          path: unixnu
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862152e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - name: Install host tools
+        run: brew install openssl@3
+      - name: Select the device
+        working-directory: unixnu
+        run: ./unixnu defconfig fuxi_defconfig --device "$GITHUB_WORKSPACE/fuxi"
+      - name: Dry run (window sizes and capacity)
+        working-directory: unixnu
+        run: ./unixnu build userdata --dry-run --device "$GITHUB_WORKSPACE/fuxi"
+      - name: Build the userdata image
+        working-directory: unixnu
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: ./unixnu build userdata --device "$GITHUB_WORKSPACE/fuxi"
+      - name: Encrypt the userdata image
+        run: |
+          # The image carries Apple disk images, so it leaves the runner only encrypted.
+          openssl="$(brew --prefix openssl@3)/bin/openssl"
+          report=$(find "$GITHUB_WORKSPACE/unixnu/out" -path '*/userdata/userdata-root.json' | head -n 1)
+          image=$(find "$GITHUB_WORKSPACE/unixnu/out" -path '*/userdata/userdata-root.img' | head -n 1)
+          [ -n "$image" ] && [ -n "$report" ] || { echo "::error::userdata-root.img or report not found"; exit 1; }
+          cd "$(dirname "$image")"
+          shasum -a 256 userdata-root.img | sed "s#  .*#  userdata-root.img#" > userdata-root.img.sha256
+          "$openssl" rand -hex 32 > userdata.key
+          "$openssl" enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -in userdata-root.img -out userdata-root.img.enc -pass file:userdata.key
+          "$openssl" pkeyutl -encrypt -pubin -inkey "$GITHUB_WORKSPACE/fuxi/ci/boot-image-recipient.pem" \
+            -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 -in userdata.key -out userdata.key.enc
+          rm -f userdata.key userdata-root.img
+          mkdir -p "$RUNNER_TEMP/encrypted"
+          mv userdata-root.img.enc userdata.key.enc userdata-root.img.sha256 userdata-root.json \
+            "$RUNNER_TEMP/encrypted/"
+          ls -l "$RUNNER_TEMP/encrypted"
+      - name: Upload the encrypted userdata image
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuxi-userdata-encrypted-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/encrypted/*
+          if-no-files-found: error
+          retention-days: 7
+      - name: Collect the text logs
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/logs"
+          find unixnu/out -path '*/logs/*.log' -size -20M -exec cp {} "$RUNNER_TEMP/logs/" \; 2>/dev/null || true
+          [ -f fuxi/unixnu.lock ] && cp fuxi/unixnu.lock "$RUNNER_TEMP/logs/unixnu.lock" || true
+          ls -l "$RUNNER_TEMP/logs"
+      - name: Upload the build logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuxi-userdata-logs-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/logs/*.log
+            ${{ runner.temp }}/logs/unixnu.lock
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Remove proprietary inputs
+        if: always()
+        run: rm -rf unixnu/out/ipsw unixnu/out/feeds
