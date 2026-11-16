@@ -283,7 +283,8 @@ jobs:
       - name: Stage the original disk images
         working-directory: unixnu
         run: |
-          tree=$(find "$GITHUB_WORKSPACE/unixnu/out" -maxdepth 4 -type d -name tree | head -n 1)
+          tree=$(find "$GITHUB_WORKSPACE/unixnu/out" -type d -name tree -path '*fuxi*tree' | head -n 1)
+          [ -n "$tree" ] || { echo "::error::assembled tree not found"; exit 1; }
           echo "tree=$tree" >> "$GITHUB_ENV"
           dmg=$(find "$GITHUB_WORKSPACE/unixnu/out/ipsw" -name '044-76040-038.dmg' | head -n 1)
           sys=$(find "$GITHUB_WORKSPACE/unixnu/out/ipsw" -name '044-76034-038.dmg' | head -n 1)
