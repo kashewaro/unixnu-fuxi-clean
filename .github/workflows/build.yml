@@ -357,18 +357,37 @@ jobs:
           dev=$(hdiutil attach -nomount -readonly -noverify -noautofsck "$GITHUB_WORKSPACE/fuxi/.cache/firmware/target-volumes/044-76034-038.dmg" | grep -m 1 -o '/dev/disk[0-9]*')
           echo "sys_dev=$dev" >> "$GITHUB_ENV"
           diskutil apfs list -plist > /tmp/sysapfs.plist
-          python3 -c "import plistlib; info=plistlib.load(open('/tmp/sysapfs.plist','rb')); vols=[v for c in info.get('Containers',[]) for v in c.get('Volumes',[])]; print('\n'.join(v.get('VolumeUUID','?')+' '+str(v.get('Name','')) for v in vols))"
+          python3 - <<'EOF'
+          import os, plistlib, subprocess
+          hdi = plistlib.loads(subprocess.check_output(['hdiutil', 'info', '-plist']))
+          ours = set()
+          for img in hdi['images']:
+              if '044-76034-038.dmg' in str(img.get('image-path', '')):
+                  for ent in img.get('system-entities', []):
+                      ours.add((ent.get('dev-entry') or '').replace('/dev/', ''))
+          apfs = plistlib.load(open('/tmp/sysapfs.plist', 'rb'))
+          vols = [v for c in apfs.get('Containers', []) for v in c.get('Volumes', [])]
+          for v in vols:
+              print(v.get('DeviceIdentifier', '?'), v.get('VolumeUUID', '?'), v.get('Name', ''))
+          cands = [v for v in vols if v.get('DeviceIdentifier') in ours and 'VolumeUUID' in v]
+          if not cands:
+              cands = [v for v in vols if v.get('Name') == 'SystemOS' and 'VolumeUUID' in v]
+          print('candidates:', [(v.get('DeviceIdentifier'), v.get('Name')) for v in cands])
+          assert len(cands) == 1, 'expected exactly one SystemOS volume, got %d' % len(cands)
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write('sys_uuid=' + cands[0]['VolumeUUID'] + '\n')
+          EOF
       - name: Sign the SystemOS policy
         run: |
           dd if="/dev/r${SYS_DEV#/dev/}" of="$RUNNER_TEMP/systemos.raw" bs=1m status=none
-          SYS_UUID=$(python3 -c "import plistlib; info=plistlib.load(open('/tmp/sysapfs.plist','rb')); vols=[v for c in info.get('Containers',[]) for v in c.get('Volumes',[])]; print([v['VolumeUUID'] for v in vols if v.get('Name')=='SystemOS' and 'VolumeUUID' in v][0])")
-          echo "sys_uuid=$SYS_UUID" >> "$GITHUB_ENV"
+          [ -n "$SYS_UUID" ] || { echo "::error::sys_uuid is empty"; exit 1; }
           python3 "$tree/scripts/make-root-policies.py" --tree "$tree" \
             --output "$tree/build/verified-root-policies" \
             --window "SystemOS=$RUNNER_TEMP/systemos.raw:$SYS_UUID"
         env:
           tree: ${{ env.tree }}
           SYS_DEV: ${{ env.sys_dev }}
+          SYS_UUID: ${{ env.sys_uuid }}
       - name: Assemble the probe bundle layout
         run: |
           mkdir -p "$tree/build/verified-root-systemos"
