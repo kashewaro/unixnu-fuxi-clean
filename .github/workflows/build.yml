@@ -280,6 +280,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: ./unixnu build userdata --device "$GITHUB_WORKSPACE/fuxi"
+      - name: Assemble the build tree
+        working-directory: unixnu
+        run: ./unixnu tree --device "$GITHUB_WORKSPACE/fuxi"
       - name: Stage the original disk images
         working-directory: unixnu
         run: |
@@ -294,9 +297,6 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/fuxi/.cache/firmware/target-volumes"
           cp "$dmg" "$sys" "$GITHUB_WORKSPACE/fuxi/.cache/firmware/target-volumes/"
           ls -l "$GITHUB_WORKSPACE/fuxi/.cache/firmware/target-volumes/"
-      - name: Assemble the build tree
-        working-directory: unixnu
-        run: ./unixnu tree --device "$GITHUB_WORKSPACE/fuxi"
       - name: Sign the OS policy (real C verification)
         run: |
           hdiutil attach -nomount -readonly -noverify -noautofsck "$OS_DMG"
