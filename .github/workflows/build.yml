@@ -299,16 +299,35 @@ jobs:
           ls -l "$GITHUB_WORKSPACE/fuxi/.cache/firmware/target-volumes/"
       - name: Sign the OS policy (real C verification)
         run: |
-          for d in $(hdiutil info -plist | python3 -c "import plistlib,sys; info=plistlib.loads(sys.stdin.buffer.read()); print(' '.join(i['dev-entry'] for i in info['images'] if '044-76040-038.dmg' in i.get('image-path','')))"); do hdiutil detach -force "$d" || true; done
-          hdiutil attach -nomount -readonly -noverify -noautofsck "$OS_DMG"
+          python3 - <<'EOF'
+          import plistlib, subprocess
+          info = plistlib.loads(subprocess.check_output(['hdiutil', 'info', '-plist']))
+          for img in info['images']:
+              if '044-76040-038.dmg' in str(img.get('image-path', '')):
+                  for ent in img.get('system-entities', []):
+                      d = ent.get('dev-entry')
+                      if d:
+                          subprocess.run(['hdiutil', 'detach', '-force', d], check=False)
+                          break
+          EOF
+          hdiutil attach -nomount -readonly -noverify -noautofsck "$GITHUB_WORKSPACE/fuxi/.cache/firmware/target-volumes/044-76040-038.dmg"
           python3 "$tree/scripts/build-owner-os-policy.py"
         env:
           tree: ${{ env.tree }}
-          OS_DMG: ${{ env.os_dmg }}
       - name: Discover the SystemOS volume UUID
         run: |
-          for d in $(hdiutil info -plist | python3 -c "import plistlib,sys; info=plistlib.loads(sys.stdin.buffer.read()); print(' '.join(i['dev-entry'] for i in info['images'] if '044-76034-038.dmg' in i.get('image-path','')))"); do hdiutil detach -force "$d" || true; done
-          dev=$(hdiutil attach -nomount -readonly -noverify -noautofsck "$sys_dmg" | grep -m 1 -o '/dev/disk[0-9]*')
+          python3 - <<'EOF'
+          import plistlib, subprocess
+          info = plistlib.loads(subprocess.check_output(['hdiutil', 'info', '-plist']))
+          for img in info['images']:
+              if '044-76034-038.dmg' in str(img.get('image-path', '')):
+                  for ent in img.get('system-entities', []):
+                      d = ent.get('dev-entry')
+                      if d:
+                          subprocess.run(['hdiutil', 'detach', '-force', d], check=False)
+                          break
+          EOF
+          dev=$(hdiutil attach -nomount -readonly -noverify -noautofsck "$GITHUB_WORKSPACE/fuxi/.cache/firmware/target-volumes/044-76034-038.dmg" | grep -m 1 -o '/dev/disk[0-9]*')
           echo "sys_dev=$dev" >> "$GITHUB_ENV"
           diskutil apfs list -plist "$dev" > /tmp/sysapfs.plist
           python3 -c "import plistlib; info=plistlib.load(open('/tmp/sysapfs.plist','rb')); vols=[v for c in info['Containers'] for v in c['Volumes']]; print('\n'.join(v['VolumeUUID']+' '+v.get('Name','') for v in vols))"
