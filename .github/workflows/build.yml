@@ -310,7 +310,9 @@ jobs:
                           subprocess.run(['hdiutil', 'detach', '-force', d], check=False)
                           break
           EOF
-          hdiutil attach -nomount -readonly -noverify -noautofsck "$GITHUB_WORKSPACE/fuxi/.cache/firmware/target-volumes/044-76040-038.dmg"
+          mkdir -p "$GITHUB_WORKSPACE/fuxi/.cache/firmware/target-volumes/os-mount"
+          hdiutil attach -readonly -nobrowse -noverify -noautofsck -mountpoint "$GITHUB_WORKSPACE/fuxi/.cache/firmware/target-volumes/os-mount" "$GITHUB_WORKSPACE/fuxi/.cache/firmware/target-volumes/044-76040-038.dmg"
+          ls -l "$GITHUB_WORKSPACE/fuxi/.cache/firmware/target-volumes/os-mount/sbin/launchd"
           python3 "$tree/scripts/build-owner-os-policy.py"
         env:
           tree: ${{ env.tree }}
