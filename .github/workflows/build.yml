@@ -267,8 +267,24 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
+      - name: Select Xcode
+        run: |
+          dir="/Applications/Xcode_${XCODE}.app"
+          if [ ! -d "$dir" ]; then
+            dir=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1)
+            echo "::warning::Xcode ${XCODE} is not on this image; using ${dir:-none}. Installed: $(ls -d /Applications/Xcode_*.app | xargs -n1 basename | tr '\n' ' ')"
+          fi
+          [ -n "$dir" ] && [ -d "$dir" ] || { echo "::error::no Xcode 26 on this image"; exit 1; }
+          echo "DEVELOPER_DIR=$dir/Contents/Developer" >> "$GITHUB_ENV"
+          DEVELOPER_DIR="$dir/Contents/Developer" xcodebuild -version
       - name: Install host tools
-        run: brew install openssl@3
+        run: |
+          brew install llvm lld mtools dtc openssl@3
+          if ! command -v unifdef >/dev/null; then
+            brew install unifdef
+            echo "$(brew --prefix unifdef)/bin" >> "$GITHUB_PATH"
+          fi
+          xcrun --sdk iphoneos --show-sdk-version
       - name: Select the device
         working-directory: unixnu
         run: ./unixnu defconfig fuxi_defconfig --device "$GITHUB_WORKSPACE/fuxi"
