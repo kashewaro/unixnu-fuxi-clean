@@ -426,8 +426,8 @@ jobs:
           rm -f bundle.key bundle.tar
           mkdir -p "$RUNNER_TEMP/encrypted"
           mv bundle.tar.enc bundle.key.enc "$RUNNER_TEMP/encrypted/"
-          cp "$tree/build/verified-root-os/verification.json" "$tree/build/verified-root-systemos/verification.json" \
-            "$RUNNER_TEMP/encrypted/"
+          cp "$tree/build/verified-root-os/verification.json" "$RUNNER_TEMP/encrypted/verification-os.json"
+          cp "$tree/build/verified-root-systemos/verification.json" "$RUNNER_TEMP/encrypted/verification-systemos.json"
           ls -l "$RUNNER_TEMP/encrypted"
         env:
           tree: ${{ env.tree }}

@@ -108,7 +108,7 @@ title = "UniXNU"
 # fuxi-touch=4 runs the FTM5 probe through sensing, fuxi-touch-hid=1 starts the HID
 # digitizer (sheng-touch-hid=1 gives it the collection), fuxi-touch-panic=2 panics
 # with the probe rows after the first lift so the table can be read from the screen.
-kernel_args = ["-v", "serial=3", "debug=0x14e", "sheng-smp=1", "armcpu-spi-ipi=1", "armcpu-self-ipi=1", "sheng-pmgr=2", "fuxi-touch=4", "fuxi-touch-hid=1", "sheng-touch-hid=1", "fuxi-touch-panic=2", "native-ufs-probe=10"]
+kernel_args = ["-v", "serial=3", "debug=0x14e", "sheng-smp=1", "armcpu-spi-ipi=1", "armcpu-self-ipi=1", "sheng-pmgr=2", "fuxi-touch=4", "fuxi-touch-hid=1", "sheng-touch-hid=1", "fuxi-touch-panic=2", "native-ufs-probe=11", "native-ufs-partition=unixnu"]
 
 [payload.adt]
 chip_id = "207"
