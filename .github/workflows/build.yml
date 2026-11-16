@@ -369,13 +369,18 @@ jobs:
           vols = [v for c in apfs.get('Containers', []) for v in c.get('Volumes', [])]
           for v in vols:
               print(v.get('DeviceIdentifier', '?'), v.get('VolumeUUID', '?'), v.get('Name', ''))
-          cands = [v for v in vols if v.get('DeviceIdentifier') in ours and 'VolumeUUID' in v]
+          cands = [v for v in vols if v.get('DeviceIdentifier') in ours]
           if not cands:
-              cands = [v for v in vols if v.get('Name') == 'SystemOS' and 'VolumeUUID' in v]
+              cands = [v for v in vols if 'SystemCryptex' in str(v.get('Name', ''))]
           print('candidates:', [(v.get('DeviceIdentifier'), v.get('Name')) for v in cands])
           assert len(cands) == 1, 'expected exactly one SystemOS volume, got %d' % len(cands)
+          dev = cands[0]['DeviceIdentifier']
+          info = plistlib.loads(subprocess.check_output(['diskutil', 'info', '-plist', '/dev/' + dev]))
+          uuid = info.get('VolumeUUID')
+          print('volume:', dev, cands[0].get('Name'), 'uuid:', uuid)
+          assert uuid, 'no VolumeUUID for /dev/' + dev
           with open(os.environ['GITHUB_ENV'], 'a') as f:
-              f.write('sys_uuid=' + cands[0]['VolumeUUID'] + '\n')
+              f.write('sys_uuid=' + uuid + '\n')
           EOF
       - name: Sign the SystemOS policy
         run: |
