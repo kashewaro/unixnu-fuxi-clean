@@ -50,6 +50,7 @@ archives = [
   "build-fuxi-hid-input.py",
   "build-fuxi-touch.py",
   "build-fuxi-ufs.py",
+  "build-fuxi-verified-root.py",
 ]
 
 [device_tree]
@@ -108,11 +109,13 @@ title = "UniXNU"
 # fuxi-touch=4 runs the FTM5 probe through sensing, fuxi-touch-hid=1 starts the HID
 # digitizer (sheng-touch-hid=1 gives it the collection), fuxi-touch-panic=2 panics
 # with the probe rows after the first lift so the table can be read from the screen.
-kernel_args = ["-v", "serial=3", "debug=0x14e", "sheng-smp=1", "armcpu-spi-ipi=1", "armcpu-self-ipi=1", "sheng-pmgr=2", "fuxi-touch=4", "fuxi-touch-hid=1", "sheng-touch-hid=1", "fuxi-touch-panic=2", "native-ufs-probe=11", "native-ufs-partition=unixnu"]
+kernel_args = ["-v", "serial=3", "debug=0x14e", "sheng-smp=1", "armcpu-spi-ipi=1", "armcpu-self-ipi=1", "sheng-pmgr=2", "fuxi-touch=4", "fuxi-touch-hid=1", "sheng-touch-hid=1", "fuxi-touch-panic=2", "native-ufs-root=1", "native-ufs-partition=unixnu"]
 
 [payload.adt]
 chip_id = "207"
 unique_chip_id = "required"
+# The OS window's APFS volume: IOFindBSDRoot matches the published root media by this UUID.
+root_match_volume_uuid = "04769D26-2CA0-4825-B443-E2E5F88300F2"
 # Memory DarwinBoot gives XNU on this unit.
 owned_memory_size = "0x130000000"
 

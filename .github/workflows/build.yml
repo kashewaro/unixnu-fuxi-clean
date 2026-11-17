@@ -139,158 +139,6 @@ jobs:
       - name: Select the device
         working-directory: unixnu
         run: ./unixnu defconfig fuxi_defconfig --device "$GITHUB_WORKSPACE/fuxi"
-      - name: Build kernel
-        working-directory: unixnu
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          ./unixnu build kernel --device "$GITHUB_WORKSPACE/fuxi"
-          ./unixnu status --device "$GITHUB_WORKSPACE/fuxi" --json > "$RUNNER_TEMP/unixnu-status.json" || true
-      - name: Verify the linked kernel
-        run: |
-          kernel=$(find unixnu/out -path '*/tree/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837.unstripped.noctf' | head -n 1)
-          [ -n "$kernel" ] || { echo "::error::linked kernel not found"; exit 1; }
-          ls -l "$kernel"
-          # Touch probe + HID: the symbols bsd_init and the digitizer need.
-          nm -U "$kernel" > "$RUNNER_TEMP/kernel-symbols.txt"
-          missing=0
-          for s in _native_touch_probe _fuxi_hid_start _geni_spi_transfer _qcom_rpmh_active_request _native_ufs_probe_calls _vr_open _boot_progress_poll; do
-            line=$(grep -E " $s\$" "$RUNNER_TEMP/kernel-symbols.txt" || true)
-            if [ -n "$line" ]; then echo "defined: $line"; else echo "::error::missing from the kernel: $s"; missing=1; fi
-          done
-          # bsd_init must call the probe (patches/xnu/fuxi-touch-probe.patch).
-          "$(brew --prefix llvm)/bin/llvm-objdump" --disassemble-symbols=_bsd_init "$kernel" > "$RUNNER_TEMP/bsd_init.txt"
-          if grep -q '_native_touch_probe' "$RUNNER_TEMP/bsd_init.txt"; then
-            echo "bsd_init: $(grep -m 1 '_native_touch_probe' "$RUNNER_TEMP/bsd_init.txt")"
-          else
-            echo "::error::bsd_init does not call native_touch_probe"; missing=1
-          fi
-          prelinked=$(find unixnu/out -path '*/kernel/kernel.macho' | head -n 1)
-          if [ -n "$prelinked" ]; then ls -l "$prelinked"; shasum -a 256 "$prelinked"; else echo "::error::no prelinked kernel"; exit 1; fi
-          # The PMGR bridge AMFI waits for (CONFIG_XNU_SHENG_PMGR): the AMFI -> PMGR instruction contract in the prelinked
-          # kexts, ShengPlatformPower's provider table against the native IOPMGR vtable, and the call from bsd_init.
-          if [ -n "$prelinked" ] && ! python3 fuxi/ci/check-pmgr-bridge.py "$prelinked"; then
-            echo "::error::PMGR bridge check failed"; missing=1
-          fi
-          # ShengHidInput's touch digitizer (scripts/build-fuxi-hid-input.py): its fixed IOHIDDevice bindings, the pinned
-          # IOHIDFamily instructions and NativeHidInput's vtable against the original one in the prelinked kernel.
-          if [ -n "$prelinked" ] && ! python3 fuxi/ci/check-hid-bindings.py "$prelinked"; then
-            echo "::error::HID binding check failed"; missing=1
-          fi
-          exit $missing
-      - name: Build payload
-        working-directory: unixnu
-        run: ./unixnu build payload --device "$GITHUB_WORKSPACE/fuxi" --uefi "$GITHUB_WORKSPACE/uefi-fuxi" --unique-chip-id "$BRINGUP_SEED"
-      - name: Build firmware
-        working-directory: unixnu
-        run: ./unixnu build firmware --device "$GITHUB_WORKSPACE/fuxi" --uefi "$GITHUB_WORKSPACE/uefi-fuxi" --target DEBUG
-      - name: Pack the boot image
-        working-directory: unixnu
-        run: |
-          mkdir -p "$RUNNER_TEMP/image"
-          ./unixnu bootimg --device "$GITHUB_WORKSPACE/fuxi" --uefi "$GITHUB_WORKSPACE/uefi-fuxi" --target DEBUG \
-            --dtb "$GITHUB_WORKSPACE/uefi-fuxi/Platforms/Xiaomi/fuxiPkg/FdtBlob/sm8550-xiaomi-fuxi.dtb" \
-            -o "$RUNNER_TEMP/image/boot.img"
-          cat "$RUNNER_TEMP/image/boot.json"
-      - name: Encrypt the boot image
-        run: |
-          # The image and the kernel carry the prelinked Apple kernelcache, so they leave the runner only encrypted.
-          openssl="$(brew --prefix openssl@3)/bin/openssl"
-          kernel=$(find "$GITHUB_WORKSPACE/unixnu/out" -path '*/kernel/kernel.macho' | head -n 1)
-          report=$(find "$GITHUB_WORKSPACE/unixnu/out" -path '*/payload/payload.json' | head -n 1)
-          [ -n "$kernel" ] && [ -n "$report" ] || { echo "::error::prelinked kernel or payload.json not found"; exit 1; }
-          cd "$RUNNER_TEMP/image"
-          gzip -9 -n -c "$kernel" > kernel.macho.gz
-          cp "$report" payload.json
-          for f in boot.img kernel.macho.gz; do shasum -a 256 "$f" | sed "s#  .*#  $f#" > "$f.sha256"; done
-          "$openssl" rand -hex 32 > boot.key
-          for f in boot.img kernel.macho.gz; do
-            "$openssl" enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -in "$f" -out "$f.enc" -pass file:boot.key
-          done
-          "$openssl" pkeyutl -encrypt -pubin -inkey "$GITHUB_WORKSPACE/fuxi/ci/boot-image-recipient.pem" \
-            -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 -in boot.key -out boot.key.enc
-          rm -f boot.key boot.img kernel.macho.gz
-          mkdir -p "$RUNNER_TEMP/encrypted"
-          mv boot.img.enc kernel.macho.gz.enc boot.key.enc boot.img.sha256 kernel.macho.gz.sha256 boot.json payload.json \
-            "$RUNNER_TEMP/encrypted/"
-          ls -l "$RUNNER_TEMP/encrypted"
-      - name: Upload the encrypted boot image
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: fuxi-boot-image-encrypted-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/encrypted/*
-          if-no-files-found: error
-          retention-days: 7
-      - name: Collect the text logs
-        if: always()
-        run: |
-          mkdir -p "$RUNNER_TEMP/logs"
-          find unixnu/out -path '*/logs/*.log' -size -20M -exec cp {} "$RUNNER_TEMP/logs/" \; 2>/dev/null || true
-          cp "$RUNNER_TEMP/unixnu-status.json" "$RUNNER_TEMP/logs/" 2>/dev/null || true
-          [ -f fuxi/unixnu.lock ] && cp fuxi/unixnu.lock "$RUNNER_TEMP/logs/unixnu.lock" || true
-          ls -l "$RUNNER_TEMP/logs"
-      - name: Upload the build logs
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: fuxi-build-logs-${{ github.run_attempt }}
-          path: |
-            ${{ runner.temp }}/logs/*.log
-            ${{ runner.temp }}/logs/*.json
-            ${{ runner.temp }}/logs/unixnu.lock
-          if-no-files-found: warn
-          retention-days: 7
-      - name: Remove proprietary inputs
-        if: always()
-        run: rm -rf unixnu/out/ipsw unixnu/out/feeds fuxi/.cache/firmware "$RUNNER_TEMP/image" unixnu/out/*/*/*/payload
-
-  userdata:
-    name: fuxi userdata root image (OS + SystemOS windows)
-    runs-on: macos-26
-    timeout-minutes: 240
-    env:
-      HOMEBREW_NO_AUTO_UPDATE: 1
-      HOMEBREW_NO_INSTALL_CLEANUP: 1
-      HOMEBREW_NO_ENV_HINTS: 1
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          path: fuxi
-          submodules: recursive
-          persist-credentials: false
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: ${{ env.UNIXNU_REPO }}
-          ref: ${{ env.UNIXNU_REF }}
-          path: unixnu
-          persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.13"
-      - name: Select Xcode
-        run: |
-          dir="/Applications/Xcode_${XCODE}.app"
-          if [ ! -d "$dir" ]; then
-            dir=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1)
-            echo "::warning::Xcode ${XCODE} is not on this image; using ${dir:-none}. Installed: $(ls -d /Applications/Xcode_*.app | xargs -n1 basename | tr '\n' ' ')"
-          fi
-          [ -n "$dir" ] && [ -d "$dir" ] || { echo "::error::no Xcode 26 on this image"; exit 1; }
-          echo "DEVELOPER_DIR=$dir/Contents/Developer" >> "$GITHUB_ENV"
-          DEVELOPER_DIR="$dir/Contents/Developer" xcodebuild -version
-      - name: Install host tools
-        run: |
-          brew install llvm lld mtools dtc openssl@3
-          if ! command -v unifdef >/dev/null; then
-            brew install unifdef
-            echo "$(brew --prefix unifdef)/bin" >> "$GITHUB_PATH"
-          fi
-          xcrun --sdk iphoneos --show-sdk-version
-      - name: Select the device
-        working-directory: unixnu
-        run: ./unixnu defconfig fuxi_defconfig --device "$GITHUB_WORKSPACE/fuxi"
-      - name: Dry run (window sizes and capacity)
-        working-directory: unixnu
-        run: ./unixnu build userdata --dry-run --device "$GITHUB_WORKSPACE/fuxi"
       - name: Build the userdata image
         working-directory: unixnu
         env:
@@ -299,11 +147,6 @@ jobs:
       - name: Assemble the build tree
         working-directory: unixnu
         run: ./unixnu tree --device "$GITHUB_WORKSPACE/fuxi"
-      - name: Build the kernel objects (probe compile records)
-        working-directory: unixnu
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: ./unixnu build kernel --device "$GITHUB_WORKSPACE/fuxi"
       - name: Stage the original disk images
         working-directory: unixnu
         run: |
@@ -393,26 +236,88 @@ jobs:
           tree: ${{ env.tree }}
           SYS_DEV: ${{ env.sys_dev }}
           SYS_UUID: ${{ env.sys_uuid }}
-      - name: Assemble the probe bundle layout
+      - name: Build kernel
+        working-directory: unixnu
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p "$tree/build/verified-root-systemos"
-          # On case-insensitive macOS verified-root-systemos IS verified-root-SystemOS: skip the self-copy.
-          if ! cmp -s "$tree/build/verified-root-SystemOS/manifest.bin" "$tree/build/verified-root-systemos/manifest.bin" 2>/dev/null; then
-            cp "$tree/build/verified-root-SystemOS/manifest.bin" "$tree/build/verified-root-systemos/manifest.bin"
+          ./unixnu build kernel --device "$GITHUB_WORKSPACE/fuxi"
+          ./unixnu status --device "$GITHUB_WORKSPACE/fuxi" --json > "$RUNNER_TEMP/unixnu-status.json" || true
+      - name: Verify the linked kernel
+        run: |
+          kernel=$(find unixnu/out -path '*/tree/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837.unstripped.noctf' | head -n 1)
+          [ -n "$kernel" ] || { echo "::error::linked kernel not found"; exit 1; }
+          ls -l "$kernel"
+          # Touch probe + HID: the symbols bsd_init and the digitizer need.
+          nm -U "$kernel" > "$RUNNER_TEMP/kernel-symbols.txt"
+          missing=0
+          for s in _native_touch_probe _fuxi_hid_start _geni_spi_transfer _qcom_rpmh_active_request _native_ufs_probe_calls _vr_open _boot_progress_poll; do
+            line=$(grep -E " $s\$" "$RUNNER_TEMP/kernel-symbols.txt" || true)
+            if [ -n "$line" ]; then echo "defined: $line"; else echo "::error::missing from the kernel: $s"; missing=1; fi
+          done
+          # bsd_init must call the probe (patches/xnu/fuxi-touch-probe.patch).
+          "$(brew --prefix llvm)/bin/llvm-objdump" --disassemble-symbols=_bsd_init "$kernel" > "$RUNNER_TEMP/bsd_init.txt"
+          if grep -q '_native_touch_probe' "$RUNNER_TEMP/bsd_init.txt"; then
+            echo "bsd_init: $(grep -m 1 '_native_touch_probe' "$RUNNER_TEMP/bsd_init.txt")"
+          else
+            echo "::error::bsd_init does not call native_touch_probe"; missing=1
           fi
-          cp "$tree/build/verified-root-policies/SystemOS/verification.json" "$tree/build/verified-root-systemos/verification.json"
-          cp "$tree/build/verified-root-policies/SystemOS/trusted-key.bin" "$tree/build/verified-root-systemos/trusted-key.bin"
-          ls -l "$tree/build/verified-root-os" "$tree/build/verified-root-systemos"
-        env:
-          tree: ${{ env.tree }}
-      - name: Build the verified-root probe bundle
+          prelinked=$(find unixnu/out -path '*/kernel/kernel.macho' | head -n 1)
+          if [ -n "$prelinked" ]; then ls -l "$prelinked"; shasum -a 256 "$prelinked"; else echo "::error::no prelinked kernel"; exit 1; fi
+          # The PMGR bridge AMFI waits for (CONFIG_XNU_SHENG_PMGR): the AMFI -> PMGR instruction contract in the prelinked
+          # kexts, ShengPlatformPower's provider table against the native IOPMGR vtable, and the call from bsd_init.
+          if [ -n "$prelinked" ] && ! python3 fuxi/ci/check-pmgr-bridge.py "$prelinked"; then
+            echo "::error::PMGR bridge check failed"; missing=1
+          fi
+          # ShengHidInput's touch digitizer (scripts/build-fuxi-hid-input.py): its fixed IOHIDDevice bindings, the pinned
+          # IOHIDFamily instructions and NativeHidInput's vtable against the original one in the prelinked kernel.
+          if [ -n "$prelinked" ] && ! python3 fuxi/ci/check-hid-bindings.py "$prelinked"; then
+            echo "::error::HID binding check failed"; missing=1
+          fi
+          exit $missing
+      - name: Build payload
+        working-directory: unixnu
+        run: ./unixnu build payload --device "$GITHUB_WORKSPACE/fuxi" --uefi "$GITHUB_WORKSPACE/uefi-fuxi" --unique-chip-id "$BRINGUP_SEED"
+      - name: Build firmware
+        working-directory: unixnu
+        run: ./unixnu build firmware --device "$GITHUB_WORKSPACE/fuxi" --uefi "$GITHUB_WORKSPACE/uefi-fuxi" --target DEBUG
+      - name: Pack the boot image
+        working-directory: unixnu
         run: |
-          # The bsd_init compile record references ios-obj/EXPORT_HDRS/libsa (only obj/EXPORT_HDRS is
-          # created); the header is unneeded for these sources, but the probe compiles with -Werror.
-          mkdir -p "$tree/build/xnu/ios-obj/EXPORT_HDRS/libsa"
-          python3 "$tree/scripts/build-verified-root-probe.py" --component os --include-systemos
-        env:
-          tree: ${{ env.tree }}
+          mkdir -p "$RUNNER_TEMP/image"
+          ./unixnu bootimg --device "$GITHUB_WORKSPACE/fuxi" --uefi "$GITHUB_WORKSPACE/uefi-fuxi" --target DEBUG \
+            --dtb "$GITHUB_WORKSPACE/uefi-fuxi/Platforms/Xiaomi/fuxiPkg/FdtBlob/sm8550-xiaomi-fuxi.dtb" \
+            -o "$RUNNER_TEMP/image/boot.img"
+          cat "$RUNNER_TEMP/image/boot.json"
+      - name: Encrypt the boot image
+        run: |
+          # The image and the kernel carry the prelinked Apple kernelcache, so they leave the runner only encrypted.
+          openssl="$(brew --prefix openssl@3)/bin/openssl"
+          kernel=$(find "$GITHUB_WORKSPACE/unixnu/out" -path '*/kernel/kernel.macho' | head -n 1)
+          report=$(find "$GITHUB_WORKSPACE/unixnu/out" -path '*/payload/payload.json' | head -n 1)
+          [ -n "$kernel" ] && [ -n "$report" ] || { echo "::error::prelinked kernel or payload.json not found"; exit 1; }
+          cd "$RUNNER_TEMP/image"
+          gzip -9 -n -c "$kernel" > kernel.macho.gz
+          cp "$report" payload.json
+          for f in boot.img kernel.macho.gz; do shasum -a 256 "$f" | sed "s#  .*#  $f#" > "$f.sha256"; done
+          "$openssl" rand -hex 32 > boot.key
+          for f in boot.img kernel.macho.gz; do
+            "$openssl" enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -in "$f" -out "$f.enc" -pass file:boot.key
+          done
+          "$openssl" pkeyutl -encrypt -pubin -inkey "$GITHUB_WORKSPACE/fuxi/ci/boot-image-recipient.pem" \
+            -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 -in boot.key -out boot.key.enc
+          rm -f boot.key boot.img kernel.macho.gz
+          mkdir -p "$RUNNER_TEMP/encrypted-boot"
+          mv boot.img.enc kernel.macho.gz.enc boot.key.enc boot.img.sha256 kernel.macho.gz.sha256 boot.json payload.json \
+            "$RUNNER_TEMP/encrypted-boot/"
+          ls -l "$RUNNER_TEMP/encrypted-boot"
+      - name: Upload the encrypted boot image
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuxi-boot-image-encrypted-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/encrypted-boot/*
+          if-no-files-found: error
+          retention-days: 7
       - name: Encrypt the policy bundle
         run: |
           openssl="$(brew --prefix openssl@3)/bin/openssl"
@@ -424,18 +329,18 @@ jobs:
           "$openssl" pkeyutl -encrypt -pubin -inkey "$GITHUB_WORKSPACE/fuxi/ci/boot-image-recipient.pem" \
             -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 -in bundle.key -out bundle.key.enc
           rm -f bundle.key bundle.tar
-          mkdir -p "$RUNNER_TEMP/encrypted"
-          mv bundle.tar.enc bundle.key.enc "$RUNNER_TEMP/encrypted/"
-          cp "$tree/build/verified-root-os/verification.json" "$RUNNER_TEMP/encrypted/verification-os.json"
-          cp "$tree/build/verified-root-systemos/verification.json" "$RUNNER_TEMP/encrypted/verification-systemos.json"
-          ls -l "$RUNNER_TEMP/encrypted"
+          mkdir -p "$RUNNER_TEMP/encrypted-bundle"
+          mv bundle.tar.enc bundle.key.enc "$RUNNER_TEMP/encrypted-bundle/"
+          cp "$tree/build/verified-root-os/verification.json" "$RUNNER_TEMP/encrypted-bundle/verification-os.json"
+          cp "$tree/build/verified-root-systemos/verification.json" "$RUNNER_TEMP/encrypted-bundle/verification-systemos.json"
+          ls -l "$RUNNER_TEMP/encrypted-bundle"
         env:
           tree: ${{ env.tree }}
       - name: Upload the encrypted policy bundle
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: fuxi-verified-bundle-encrypted-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/encrypted/*
+          path: ${{ runner.temp }}/encrypted-bundle/*
           if-no-files-found: error
           retention-days: 7
       - name: Encrypt the userdata image
@@ -452,15 +357,15 @@ jobs:
           "$openssl" pkeyutl -encrypt -pubin -inkey "$GITHUB_WORKSPACE/fuxi/ci/boot-image-recipient.pem" \
             -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 -in userdata.key -out userdata.key.enc
           rm -f userdata.key userdata-root.img
-          mkdir -p "$RUNNER_TEMP/encrypted"
+          mkdir -p "$RUNNER_TEMP/encrypted-userdata"
           mv userdata-root.img.enc userdata.key.enc userdata-root.img.sha256 userdata-root.json \
-            "$RUNNER_TEMP/encrypted/"
-          ls -l "$RUNNER_TEMP/encrypted"
+            "$RUNNER_TEMP/encrypted-userdata/"
+          ls -l "$RUNNER_TEMP/encrypted-userdata"
       - name: Upload the encrypted userdata image
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: fuxi-userdata-encrypted-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/encrypted/*
+          path: ${{ runner.temp }}/encrypted-userdata/*
           if-no-files-found: error
           retention-days: 7
       - name: Collect the text logs
@@ -468,22 +373,20 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/logs"
           find unixnu/out -path '*/logs/*.log' -size -20M -exec cp {} "$RUNNER_TEMP/logs/" \; 2>/dev/null || true
+          cp "$RUNNER_TEMP/unixnu-status.json" "$RUNNER_TEMP/logs/" 2>/dev/null || true
           [ -f fuxi/unixnu.lock ] && cp fuxi/unixnu.lock "$RUNNER_TEMP/logs/unixnu.lock" || true
           ls -l "$RUNNER_TEMP/logs"
       - name: Upload the build logs
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: fuxi-userdata-logs-${{ github.run_attempt }}
+          name: fuxi-build-logs-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/logs/*.log
+            ${{ runner.temp }}/logs/*.json
             ${{ runner.temp }}/logs/unixnu.lock
           if-no-files-found: warn
           retention-days: 7
       - name: Remove proprietary inputs
         if: always()
-        run: |
-          if [ -n "${sys_dev:-}" ]; then hdiutil detach -force "$sys_dev" 2>/dev/null || true; fi
-          os_dev=$(hdiutil info -plist 2>/dev/null | python3 -c "import plistlib,sys; info=plistlib.loads(sys.stdin.buffer.read()); print('\n'.join(i['dev-entry'] for i in info['images'] if '044-76040-038.dmg' in i.get('image-path','')))" 2>/dev/null || true)
-          if [ -n "${os_dev:-}" ]; then hdiutil detach -force "$os_dev" 2>/dev/null || true; fi
-          rm -rf unixnu/out/ipsw unixnu/out/feeds
+        run: rm -rf unixnu/out/ipsw unixnu/out/feeds fuxi/.cache/firmware "$RUNNER_TEMP/image" unixnu/out/*/*/*/payload
