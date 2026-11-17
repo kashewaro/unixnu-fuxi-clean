@@ -106,10 +106,12 @@ loader = "firmware"
 title = "UniXNU"
 # Baseline: verbose + serial + debug. sheng-pmgr=2 publishes the original ApplePMGRNub
 # AMFI waits for (the bridge refuses every power operation, it is not power management).
+# pmgr=2 is the same switch in the upstream payload check's vocabulary for native UFS
+# root (it requires exactly one pmgr=2); nothing on fuxi parses bare pmgr, so it is inert.
 # fuxi-touch=4 runs the FTM5 probe through sensing, fuxi-touch-hid=1 starts the HID
 # digitizer (sheng-touch-hid=1 gives it the collection), fuxi-touch-panic=2 panics
 # with the probe rows after the first lift so the table can be read from the screen.
-kernel_args = ["-v", "serial=3", "debug=0x14e", "sheng-smp=1", "armcpu-spi-ipi=1", "armcpu-self-ipi=1", "sheng-pmgr=2", "fuxi-touch=4", "fuxi-touch-hid=1", "sheng-touch-hid=1", "fuxi-touch-panic=2", "native-ufs-root=1", "native-ufs-partition=unixnu"]
+kernel_args = ["-v", "serial=3", "debug=0x14e", "sheng-smp=1", "armcpu-spi-ipi=1", "armcpu-self-ipi=1", "sheng-pmgr=2", "pmgr=2", "fuxi-touch=4", "fuxi-touch-hid=1", "sheng-touch-hid=1", "fuxi-touch-panic=2", "native-ufs-root=1", "native-ufs-partition=unixnu"]
 
 [payload.adt]
 chip_id = "207"
