@@ -389,4 +389,7 @@ jobs:
           retention-days: 7
       - name: Remove proprietary inputs
         if: always()
-        run: rm -rf unixnu/out/ipsw unixnu/out/feeds fuxi/.cache/firmware "$RUNNER_TEMP/image" unixnu/out/*/*/*/payload
+        run: |
+          hdiutil detach -force "$GITHUB_WORKSPACE/fuxi/.cache/firmware/target-volumes/os-mount" 2>/dev/null || true
+          if [ -n "${sys_dev:-}" ]; then hdiutil detach -force "$sys_dev" 2>/dev/null || true; fi
+          rm -rf unixnu/out/ipsw unixnu/out/feeds fuxi/.cache/firmware "$RUNNER_TEMP/image" unixnu/out/*/*/*/payload
