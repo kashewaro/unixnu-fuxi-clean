@@ -51,6 +51,7 @@ archives = [
   "build-fuxi-touch.py",
   "build-fuxi-ufs.py",
   "build-fuxi-verified-root.py",
+  "build-fuxi-root-auth.py",
 ]
 
 [device_tree]
