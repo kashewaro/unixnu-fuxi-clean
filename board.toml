@@ -95,7 +95,10 @@ volume = "FUXIESP"
 # stays in fastboot). Probe with a tight volume: kernel (~52 MB) + trustcache
 # + ADT fit in 80 MiB; total image ~85 MB. If this still hangs, the next probe
 # is a firmware-only (ramdisk none) menu image.
-size_mib = 80
+# Task 7 root: the kernel links the ~73 MiB verified-root bundle, so the
+# payload needs 128 MiB (~135 MB image). Between the proven 85 MB and the
+# hanging 144 MB: the boot test decides.
+size_mib = 128
 # Entry probe bars + panic screen (--no-reset): stage 3's reset cave and the
 # 0xa1f-byte panic screen do not fit together in the entry padding (the patcher
 # refuses: panic load + len overruns PANIC_CAVE_END). Bars show whether the
