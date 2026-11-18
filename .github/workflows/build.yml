@@ -236,6 +236,20 @@ jobs:
           tree: ${{ env.tree }}
           SYS_DEV: ${{ env.sys_dev }}
           SYS_UUID: ${{ env.sys_uuid }}
+      - name: Fetch the IPSW trust caches
+        working-directory: unixnu
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: ./unixnu ipsw fetch --device "$GITHUB_WORKSPACE/fuxi"
+      - name: Bundle the trust caches
+        run: |
+          static=$(find "$GITHUB_WORKSPACE/unixnu/out/ipsw" -name '044-76040-038.dmg.trustcache' | head -n 1)
+          system=$(find "$GITHUB_WORKSPACE/unixnu/out/ipsw" -name '044-76034-038.dmg.trustcache' | head -n 1)
+          [ -n "$static" ] && [ -n "$system" ] || { echo "::error::trust caches not found"; exit 1; }
+          python3 "$tree/scripts/build-fuxi-trust-bundle.py" "$tree/build/fuxi-trust/trust-cache.bundle" "$static" "$system"
+          shasum -a 256 "$tree/build/fuxi-trust/trust-cache.bundle"
+        env:
+          tree: ${{ env.tree }}
       - name: Build kernel
         working-directory: unixnu
         env:
@@ -277,7 +291,9 @@ jobs:
           exit $missing
       - name: Build payload
         working-directory: unixnu
-        run: ./unixnu build payload --device "$GITHUB_WORKSPACE/fuxi" --uefi "$GITHUB_WORKSPACE/uefi-fuxi" --unique-chip-id "$BRINGUP_SEED"
+        env:
+          tree: ${{ env.tree }}
+        run: ./unixnu build payload --device "$GITHUB_WORKSPACE/fuxi" --uefi "$GITHUB_WORKSPACE/uefi-fuxi" --unique-chip-id "$BRINGUP_SEED" --trust-cache "$tree/build/fuxi-trust/trust-cache.bundle"
       - name: Build firmware
         working-directory: unixnu
         run: ./unixnu build firmware --device "$GITHUB_WORKSPACE/fuxi" --uefi "$GITHUB_WORKSPACE/uefi-fuxi" --target DEBUG
